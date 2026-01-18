@@ -10,7 +10,13 @@ use crate::{bail_ton_core, bail_ton_core_data};
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use crc::Crc;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
+use serde::de::{Error, Visitor};
 use std::cmp::Ordering;
+use std::fmt::Formatter;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 
@@ -112,6 +118,41 @@ impl TryFrom<String> for TonAddress {
 impl TryFrom<&str> for TonAddress {
     type Error = TonCoreError;
     fn try_from(value: &str) -> Result<Self, Self::Error> { TonAddress::from_str(value) }
+}
+
+impl Serialize for TonAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_base64(true, true, true))
+    }
+}
+
+struct TonAddressVisitor;
+
+impl Visitor<'_> for TonAddressVisitor {
+    type Value = TonAddress;
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        formatter.write_str("an string representing TON address in Hex or Base64 format")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        v.parse().map_err(E::custom)
+    }
+}
+
+impl<'de> Deserialize<'de> for TonAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(TonAddressVisitor)
+    }
 }
 
 impl Display for TonAddress {
